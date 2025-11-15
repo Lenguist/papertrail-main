@@ -35,6 +35,7 @@ export default function PublicProfilePage() {
   const [followers, setFollowers] = useState<any[]>([])
   const [following, setFollowing] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [expandedAuthors, setExpandedAuthors] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     const init = async () => {
@@ -57,19 +58,72 @@ export default function PublicProfilePage() {
         .order('inserted_at', { ascending: false })
       const res = await base
       if (!res.error) setItems((res.data as any) ?? [])
-      // load follower/following lists with joined profiles
-      const [folRes, ingRes] = await Promise.all([
-        supabaseBrowser
-          .from('follows')
-          .select('follower_id, profiles:follower_id (username, display_name, id)')
-          .eq('following_id', p.id),
-        supabaseBrowser
-          .from('follows')
-          .select('following_id, profiles:following_id (username, display_name, id)')
-          .eq('follower_id', p.id),
-      ])
-      if (!folRes.error) setFollowers(folRes.data as any)
-      if (!ingRes.error) setFollowing(ingRes.data as any)
+      // load follower/following lists
+      if (p.id) {
+        try {
+          // Get followers (people following this user)
+          const folRes = await supabaseBrowser
+            .from('follows')
+            .select('follower_id')
+            .eq('following_id', p.id)
+          
+          if (!folRes.error && folRes.data) {
+            if (folRes.data.length > 0) {
+              const followerIds = folRes.data.map((f: any) => f.follower_id)
+              const followerProfiles = await supabaseBrowser
+                .from('profiles')
+                .select('id,username,display_name')
+                .in('id', followerIds)
+              
+              if (!followerProfiles.error && followerProfiles.data) {
+                const profileMap: any = {}
+                for (const prof of followerProfiles.data as any[]) {
+                  profileMap[prof.id] = prof
+                }
+                const formatted = folRes.data.map((f: any) => ({
+                  follower_id: f.follower_id,
+                  profiles: profileMap[f.follower_id]
+                }))
+                setFollowers(formatted)
+              }
+            } else {
+              setFollowers([])
+            }
+          }
+          
+          // Get following (people this user follows)
+          const ingRes = await supabaseBrowser
+            .from('follows')
+            .select('following_id')
+            .eq('follower_id', p.id)
+          
+          if (!ingRes.error && ingRes.data) {
+            if (ingRes.data.length > 0) {
+              const followingIds = ingRes.data.map((f: any) => f.following_id)
+              const followingProfiles = await supabaseBrowser
+                .from('profiles')
+                .select('id,username,display_name')
+                .in('id', followingIds)
+              
+              if (!followingProfiles.error && followingProfiles.data) {
+                const profileMap: any = {}
+                for (const prof of followingProfiles.data as any[]) {
+                  profileMap[prof.id] = prof
+                }
+                const formatted = ingRes.data.map((f: any) => ({
+                  following_id: f.following_id,
+                  profiles: profileMap[f.following_id]
+                }))
+                setFollowing(formatted)
+              }
+            } else {
+              setFollowing([])
+            }
+          }
+        } catch (error) {
+          console.error('Error loading followers/following:', error)
+        }
+      }
       setLoading(false)
     }
     if (usernameParam) init()
@@ -162,20 +216,72 @@ export default function PublicProfilePage() {
             const authors = (p?.authors_json ?? []) as string[]
             return (
               <li key={it.openalex_id} className="rounded-lg border border-gray-200 p-3 dark:border-zinc-800">
-                <div className="font-medium text-gray-900 dark:text-white">{p?.title ?? it.openalex_id}</div>
-                <div className="text-sm text-gray-600 dark:text-gray-300">
-                  {authors.join(', ')} {p?.year ? `· ${p.year}` : ''}
+                <div>
+                  {p?.url && (
+                    <a
+                      href={p.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="float-left text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 mr-2"
+                      title="Open paper"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </a>
+                  )}
+                  <div className="font-medium text-gray-900 dark:text-white">{p?.title ?? it.openalex_id}</div>
                 </div>
-                {p?.url && (
-                  <a
-                    href={p.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-1 inline-block text-sm underline underline-offset-4"
-                  >
-                    Open
-                  </a>
+                <div className="text-sm text-gray-600 dark:text-gray-300">
+                  {expandedAuthors.has(it.openalex_id) ? (
+                    <div>
+                      {authors.join(', ')}
+                      {authors.length > 12 && (
+                        <button
+                          onClick={() => setExpandedAuthors(prev => {
+                            const next = new Set(prev)
+                            next.delete(it.openalex_id)
+                            return next
+                          })}
+                          className="ml-2 text-xs text-orange-600 dark:text-orange-400 hover:underline"
+                        >
+                          collapse
+                        </button>
+                      )}
+                    </div>
+                  ) : authors.length > 12 ? (
+                    <div>
+                      {authors.slice(0, 12).join(', ')}...
+                      <button
+                        onClick={() => setExpandedAuthors(prev => new Set(prev).add(it.openalex_id))}
+                        className="ml-2 text-xs text-orange-600 dark:text-orange-400 hover:underline"
+                      >
+                        expand
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      {authors.join(', ')}
+                    </div>
+                  )}
+                </div>
+                {p?.year && (
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Date published: {p.year}
+                  </div>
                 )}
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  Date added to the library: {new Date(it.inserted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).replace(/ (\d{4})/, ', $1')}
+                </div>
+                <div className="mt-2">
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                    it.status === 'read' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
+                    : it.status === 'reading' ? 'bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-200'
+                    : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'
+                  }`}>
+                    {it.status === 'to_read' ? 'To read' : it.status === 'reading' ? 'Reading' : 'Read'}
+                  </span>
+                </div>
               </li>
             )
           })}
@@ -183,37 +289,45 @@ export default function PublicProfilePage() {
       ))}
 
       {tab === 'followers' && (
-        <ul className="space-y-2">
-          {followers.map((f: any) => (
-            <li key={f.follower_id} className="flex items-center justify-between rounded border border-gray-200 p-2 dark:border-zinc-800">
-              <div>
-                <a href={`/u/${f.profiles?.username ?? ''}`} className="font-medium hover:underline">
-                  {f.profiles?.display_name ?? f.profiles?.username ?? f.follower_id}
-                </a>
-                {f.profiles?.username && (
-                  <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">@{f.profiles.username}</span>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
+        followers.length === 0 ? (
+          <p className="text-gray-700 dark:text-gray-300">No followers yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {followers.map((f: any) => (
+              <li key={f.follower_id} className="flex items-center justify-between rounded border border-gray-200 p-2 dark:border-zinc-800">
+                <div>
+                  <a href={`/u/${f.profiles?.username ?? ''}`} className="font-medium hover:underline">
+                    {f.profiles?.display_name ?? f.profiles?.username ?? f.follower_id}
+                  </a>
+                  {f.profiles?.username && (
+                    <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">@{f.profiles.username}</span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )
       )}
 
       {tab === 'following' && (
-        <ul className="space-y-2">
-          {following.map((f: any) => (
-            <li key={f.following_id} className="flex items-center justify-between rounded border border-gray-200 p-2 dark:border-zinc-800">
-              <div>
-                <a href={`/u/${f.profiles?.username ?? ''}`} className="font-medium hover:underline">
-                  {f.profiles?.display_name ?? f.profiles?.username ?? f.following_id}
-                </a>
-                {f.profiles?.username && (
-                  <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">@{f.profiles.username}</span>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
+        following.length === 0 ? (
+          <p className="text-gray-700 dark:text-gray-300">Not following anyone yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {following.map((f: any) => (
+              <li key={f.following_id} className="flex items-center justify-between rounded border border-gray-200 p-2 dark:border-zinc-800">
+                <div>
+                  <a href={`/u/${f.profiles?.username ?? ''}`} className="font-medium hover:underline">
+                    {f.profiles?.display_name ?? f.profiles?.username ?? f.following_id}
+                  </a>
+                  {f.profiles?.username && (
+                    <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">@{f.profiles.username}</span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )
       )}
     </div>
   )
