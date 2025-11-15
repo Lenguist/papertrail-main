@@ -7,12 +7,13 @@ export type PublicProfile = {
   username: string | null
   display_name: string | null
   bio: string | null
+  avatar_url: string | null
 }
 
 export async function getProfileByUsername(username: string): Promise<PublicProfile | null> {
   const res = await supabaseBrowser
     .from('profiles')
-    .select('id, username, display_name, bio')
+    .select('id, username, display_name, bio, avatar_url')
     .ilike('username', username)
     .single()
   if (res.error) return null

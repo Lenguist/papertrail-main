@@ -20,6 +20,11 @@ export default function ProfilePage() {
   const [postsCount, setPostsCount] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
 
+  const refetchProfile = async () => {
+    const p = await fetchMyProfile()
+    setProfile(p)
+  }
+
   useEffect(() => {
     const init = async () => {
       const { data } = await supabaseBrowser.auth.getSession()
@@ -41,6 +46,15 @@ export default function ProfilePage() {
       setLoading(false)
     }
     init()
+
+    // Listen for visibility changes to refresh profile when returning to this page
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        refetchProfile()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [router])
 
   if (!session || loading) {
@@ -54,19 +68,32 @@ export default function ProfilePage() {
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6">
       <div className="mb-6 flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{profile?.display_name || profile?.username}</h1>
-          {profile?.username && <p className="text-sm text-gray-600 dark:text-gray-300">@{profile.username}</p>}
-          {profile?.bio && <p className="mt-2 text-gray-700 dark:text-gray-300">{profile.bio}</p>}
-          <div className="mt-3 flex items-center gap-2">
-            <span className="chip">{libraryCount ?? 0} library</span>
-            <span className="chip">{postsCount ?? 0} posts</span>
-            {counts && (
-              <>
-                <span className="chip">{counts.followers} followers</span>
-                <span className="chip">{counts.following} following</span>
-              </>
+        <div className="flex items-start gap-4">
+          <div className="h-32 w-32 flex-shrink-0 rounded-full bg-gray-200 dark:bg-zinc-700 overflow-hidden">
+            {profile?.avatar_url ? (
+              <img src={profile.avatar_url} alt={profile?.display_name || profile?.username || 'Profile'} className="h-full w-full object-cover" />
+            ) : (
+              <div className="h-full w-full flex items-center justify-center">
+                <svg className="w-16 h-16 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                </svg>
+              </div>
             )}
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{profile?.display_name || profile?.username}</h1>
+            {profile?.username && <p className="text-sm text-gray-600 dark:text-gray-300">@{profile.username}</p>}
+            {profile?.bio && <p className="mt-2 text-gray-700 dark:text-gray-300">{profile.bio}</p>}
+            <div className="mt-3 flex items-center gap-2">
+              <span className="chip">{libraryCount ?? 0} library</span>
+              <span className="chip">{postsCount ?? 0} posts</span>
+              {counts && (
+                <>
+                  <span className="chip">{counts.followers} followers</span>
+                  <span className="chip">{counts.following} following</span>
+                </>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">

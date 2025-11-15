@@ -16,7 +16,10 @@ export default function ProfileSettingsPage() {
   const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [bio, setBio] = useState('')
-  // Avatar postponed until we add uploads
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
 
   useEffect(() => {
     const init = async () => {
@@ -32,6 +35,7 @@ export default function ProfileSettingsPage() {
         setUsername(p.username ?? '')
         setDisplayName(p.display_name ?? '')
         setBio(p.bio ?? '')
+        setAvatarUrl(p.avatar_url ?? null)
       }
       setLoading(false)
     }
@@ -46,15 +50,64 @@ export default function ProfileSettingsPage() {
   async function handleSave() {
     setSaving(true)
     setMessage(null)
+    
+    let finalAvatarUrl = avatarUrl
+    
+    // Upload avatar if a new file was selected
+    if (avatarFile && session) {
+      try {
+        setUploading(true)
+        const fileExt = avatarFile.name.split('.').pop()
+        const fileName = `${session.user.id}-${Date.now()}.${fileExt}`
+        const filePath = `avatars/${fileName}`
+        
+        const uploadRes = await supabaseBrowser.storage
+          .from('avatars')
+          .upload(filePath, avatarFile, { upsert: false })
+        
+        if (uploadRes.error) {
+          setMessage(`Upload failed: ${uploadRes.error.message}`)
+          setSaving(false)
+          setUploading(false)
+          return
+        }
+        
+        // Get public URL
+        const { data: urlData } = supabaseBrowser.storage
+          .from('avatars')
+          .getPublicUrl(filePath)
+        
+        finalAvatarUrl = urlData?.publicUrl ?? null
+        setAvatarUrl(finalAvatarUrl)
+        setAvatarFile(null)
+      } catch (error: any) {
+        setMessage(`Upload error: ${error.message}`)
+        setSaving(false)
+        setUploading(false)
+        return
+      }
+    }
+    
     const res = await saveMyProfile({
       username: username || null,
       display_name: displayName || null,
       bio: bio || null,
-      avatar_url: null,
+      avatar_url: finalAvatarUrl,
     })
     if (!res.ok) setMessage(res.message)
-    else setMessage('Saved!')
+    else {
+      setMessage('Saved!')
+      setAvatarPreview(null)
+      // Refresh avatar URL from database to ensure it's persisted
+      setTimeout(async () => {
+        const p = await fetchMyProfile()
+        if (p) {
+          setAvatarUrl(p.avatar_url ?? null)
+        }
+      }, 500)
+    }
     setSaving(false)
+    setUploading(false)
   }
 
   async function handleDeleteMyData() {
@@ -92,6 +145,44 @@ export default function ProfileSettingsPage() {
     <div className="mx-auto w-full max-w-2xl px-4 py-6">
       <h1 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white">Profile Settings</h1>
       <div className="space-y-4 rounded-lg border border-gray-200 p-4 dark:border-zinc-800">
+        <div>
+          <label className="mb-1 block text-sm text-gray-700 dark:text-gray-300">Profile picture</label>
+          <div className="flex items-center gap-4">
+            {(avatarPreview || avatarUrl) && (
+              <img
+                src={avatarPreview || avatarUrl || ''}
+                alt="Profile"
+                className="h-20 w-20 rounded-full object-cover"
+              />
+            )}
+            <div className="flex flex-col gap-2">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  if (e.target.files?.[0]) {
+                    const file = e.target.files[0]
+                    setAvatarFile(file)
+                    // Create preview
+                    const reader = new FileReader()
+                    reader.onload = (event) => {
+                      setAvatarPreview(event.target?.result as string)
+                    }
+                    reader.readAsDataURL(file)
+                  }
+                }}
+                disabled={uploading || saving}
+                className="block text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 dark:file:bg-orange-900/20 dark:file:text-orange-300"
+              />
+              {avatarFile && (
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  Selected: {avatarFile.name}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
         <div>
           <label className="mb-1 block text-sm text-gray-700 dark:text-gray-300">Username</label>
           <input
