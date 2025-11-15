@@ -28,7 +28,7 @@ export default function ActivityPage() {
   const [session, setSession] = useState<Session | null>(null)
   const [posts, setPosts] = useState<Record<string, any>>({})
   const [papers, setPapers] = useState<Record<string, any>>({})
-  const [profiles, setProfiles] = useState<Record<string, { username: string | null; display_name: string | null }>>({})
+  const [profiles, setProfiles] = useState<Record<string, { username: string | null; display_name: string | null; avatar_url: string | null }>>({})
   const [loading, setLoading] = useState(true)
   const [expandedAuthors, setExpandedAuthors] = useState<Set<string>>(new Set())
   const [events, setEvents] = useState<any[]>([])
@@ -86,10 +86,10 @@ export default function ActivityPage() {
       
       // Get profiles for these users
       if (userIds.length > 0) {
-        const profRes = await supabaseBrowser.from('profiles').select('id,username,display_name').in('id', userIds)
+        const profRes = await supabaseBrowser.from('profiles').select('id,username,display_name,avatar_url').in('id', userIds)
         if (!profRes.error) {
           const map: any = {}
-          for (const r of profRes.data as any[]) map[r.id] = { username: r.username, display_name: r.display_name }
+          for (const r of profRes.data as any[]) map[r.id] = { username: r.username, display_name: r.display_name, avatar_url: r.avatar_url }
           setProfiles(map)
         }
       }
@@ -156,7 +156,18 @@ export default function ActivityPage() {
             
             return (
               <li key={`${e.type}-${e.user_id}-${e.created_at}`} className="rounded-lg border border-gray-200 p-3 dark:border-zinc-800">
-                <div className="mb-2 flex items-center gap-2">
+                <div className="mb-2 flex items-center gap-3">
+                  <div className="h-10 w-10 flex-shrink-0 rounded-full bg-gray-200 dark:bg-zinc-700 overflow-hidden">
+                    {user?.avatar_url ? (
+                      <img src={user.avatar_url} alt={name} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="h-full w-full flex items-center justify-center">
+                        <svg className="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
                   <div className="text-sm text-gray-600 dark:text-gray-400">
                     <a href={`/u/${user?.username ?? ''}`} className="font-medium text-gray-900 hover:underline dark:text-white">
                       {name}

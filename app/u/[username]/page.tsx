@@ -72,7 +72,7 @@ export default function PublicProfilePage() {
               const followerIds = folRes.data.map((f: any) => f.follower_id)
               const followerProfiles = await supabaseBrowser
                 .from('profiles')
-                .select('id,username,display_name')
+                .select('id,username,display_name,avatar_url')
                 .in('id', followerIds)
               
               if (!followerProfiles.error && followerProfiles.data) {
@@ -102,7 +102,7 @@ export default function PublicProfilePage() {
               const followingIds = ingRes.data.map((f: any) => f.following_id)
               const followingProfiles = await supabaseBrowser
                 .from('profiles')
-                .select('id,username,display_name')
+                .select('id,username,display_name,avatar_url')
                 .in('id', followingIds)
               
               if (!followingProfiles.error && followingProfiles.data) {
@@ -148,20 +148,33 @@ export default function PublicProfilePage() {
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6">
       <div className="mb-6 flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            {profile.display_name || profile.username}
-          </h1>
-          {profile.username && (
-            <p className="text-sm text-gray-600 dark:text-gray-300">@{profile.username}</p>
-          )}
-          {profile.bio && <p className="mt-2 text-gray-700 dark:text-gray-300">{profile.bio}</p>}
-          {counts && (
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              <span className="chip mr-2">{counts.followers} followers</span>
-              <span className="chip">{counts.following} following</span>
-            </p>
-          )}
+        <div className="flex items-start gap-4">
+          <div className="h-32 w-32 flex-shrink-0 rounded-full bg-gray-200 dark:bg-zinc-700 overflow-hidden">
+            {profile?.avatar_url ? (
+              <img src={profile.avatar_url} alt={profile.display_name || profile.username || 'Profile'} className="h-full w-full object-cover" />
+            ) : (
+              <div className="h-full w-full flex items-center justify-center">
+                <svg className="w-16 h-16 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                </svg>
+              </div>
+            )}
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {profile.display_name || profile.username}
+            </h1>
+            {profile.username && (
+              <p className="text-sm text-gray-600 dark:text-gray-300">@{profile.username}</p>
+            )}
+            {profile.bio && <p className="mt-2 text-gray-700 dark:text-gray-300">{profile.bio}</p>}
+            {counts && (
+              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                <span className="chip mr-2">{counts.followers} followers</span>
+                <span className="chip">{counts.following} following</span>
+              </p>
+            )}
+          </div>
         </div>
         {!isMe && <FollowButton targetUserId={profile.id} />}
       </div>
@@ -294,13 +307,26 @@ export default function PublicProfilePage() {
         ) : (
           <ul className="space-y-2">
             {followers.map((f: any) => (
-              <li key={f.follower_id} className="flex items-center justify-between rounded border border-gray-200 p-2 dark:border-zinc-800">
-                <div>
+              <li key={f.follower_id} className="flex items-center gap-3 rounded border border-gray-200 p-2 dark:border-zinc-800">
+                <div className="h-10 w-10 flex-shrink-0 rounded-full bg-gray-200 dark:bg-zinc-700 overflow-hidden">
+                  {f.profiles?.avatar_url ? (
+                    <img src={f.profiles.avatar_url} alt={f.profiles.display_name || f.profiles.username || 'User'} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center">
+                      <svg className="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1">
                   <a href={`/u/${f.profiles?.username ?? ''}`} className="font-medium hover:underline">
                     {f.profiles?.display_name ?? f.profiles?.username ?? f.follower_id}
                   </a>
                   {f.profiles?.username && (
-                    <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">@{f.profiles.username}</span>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      @{f.profiles.username}
+                    </div>
                   )}
                 </div>
               </li>
@@ -315,13 +341,26 @@ export default function PublicProfilePage() {
         ) : (
           <ul className="space-y-2">
             {following.map((f: any) => (
-              <li key={f.following_id} className="flex items-center justify-between rounded border border-gray-200 p-2 dark:border-zinc-800">
-                <div>
+              <li key={f.following_id} className="flex items-center gap-3 rounded border border-gray-200 p-2 dark:border-zinc-800">
+                <div className="h-10 w-10 flex-shrink-0 rounded-full bg-gray-200 dark:bg-zinc-700 overflow-hidden">
+                  {f.profiles?.avatar_url ? (
+                    <img src={f.profiles.avatar_url} alt={f.profiles.display_name || f.profiles.username || 'User'} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center">
+                      <svg className="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1">
                   <a href={`/u/${f.profiles?.username ?? ''}`} className="font-medium hover:underline">
                     {f.profiles?.display_name ?? f.profiles?.username ?? f.following_id}
                   </a>
                   {f.profiles?.username && (
-                    <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">@{f.profiles.username}</span>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      @{f.profiles.username}
+                    </div>
                   )}
                 </div>
               </li>

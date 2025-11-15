@@ -20,14 +20,14 @@ export default function FeedPage() {
   const router = useRouter()
   const [session, setSession] = useState<Session | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
-  const [profiles, setProfiles] = useState<Record<string, { username: string | null; display_name: string | null }>>({})
+  const [profiles, setProfiles] = useState<Record<string, { username: string | null; display_name: string | null; avatar_url: string | null }>>({})
   const [papers, setPapers] = useState<Record<string, any>>({})
   const [likesCount, setLikesCount] = useState<Record<string, number>>({})
   const [likedByMe, setLikedByMe] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
   const [expandedAuthors, setExpandedAuthors] = useState<Set<string>>(new Set())
   const [searchQuery, setSearchQuery] = useState('')
-  const [allProfiles, setAllProfiles] = useState<Record<string, { username: string | null; display_name: string | null }>>({})
+  const [allProfiles, setAllProfiles] = useState<Record<string, { username: string | null; display_name: string | null; avatar_url: string | null }>>({})
 
   useEffect(() => {
     const init = async () => {
@@ -65,22 +65,22 @@ export default function FeedPage() {
       const uniqueUsers = Array.from(new Set(ps.map((p) => p.user_id)))
       const profRes = await supabaseBrowser
         .from('profiles')
-        .select('id,username,display_name')
+        .select('id,username,display_name,avatar_url')
         .in('id', uniqueUsers)
       if (!profRes.error) {
         const map: any = {}
         for (const r of profRes.data as any[]) {
-          map[r.id] = { username: r.username, display_name: r.display_name }
+          map[r.id] = { username: r.username, display_name: r.display_name, avatar_url: r.avatar_url }
         }
         setProfiles(map)
       }
       
       // fetch ALL profiles for search functionality
-      const allProfRes = await supabaseBrowser.from('profiles').select('id,username,display_name')
+      const allProfRes = await supabaseBrowser.from('profiles').select('id,username,display_name,avatar_url')
       if (!allProfRes.error) {
         const allMap: any = {}
         for (const r of allProfRes.data as any[]) {
-          allMap[r.id] = { username: r.username, display_name: r.display_name }
+          allMap[r.id] = { username: r.username, display_name: r.display_name, avatar_url: r.avatar_url }
         }
         setAllProfiles(allMap)
       }
@@ -184,12 +184,25 @@ export default function FeedPage() {
               {matchingUsers.map((user) => (
                 <li key={user.userId} className="rounded-lg border border-gray-200 p-2 dark:border-zinc-800">
                   <a href={`/u/${user.username ?? ''}`} className="flex items-center justify-between hover:bg-gray-50 dark:hover:bg-zinc-900 p-1 rounded">
-                    <div>
-                      <div className="font-medium text-gray-900 dark:text-white">
-                        {user.display_name || user.username}
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 flex-shrink-0 rounded-full bg-gray-200 dark:bg-zinc-700 overflow-hidden">
+                        {user.avatar_url ? (
+                          <img src={user.avatar_url} alt={user.display_name || user.username || 'User'} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center">
+                            <svg className="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                        )}
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        @{user.username}
+                      <div>
+                        <div className="font-medium text-gray-900 dark:text-white">
+                          {user.display_name || user.username}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          @{user.username}
+                        </div>
                       </div>
                     </div>
                     <div className="text-orange-600 dark:text-orange-400">→</div>
@@ -219,26 +232,39 @@ export default function FeedPage() {
             if (p.type === 'added_to_library') action = 'added to library'
             return (
               <li key={p.id} className="rounded-lg border border-gray-200 p-3 dark:border-zinc-800">
-                <div className="mb-2 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      <a href={`/u/${prof?.username ?? ''}`} className="font-medium text-gray-900 hover:underline dark:text-white">
-                        {name}
-                      </a>{' '}
-                      {action}
+                <div className="mb-2 flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 flex-1">
+                    <div className="h-10 w-10 flex-shrink-0 rounded-full bg-gray-200 dark:bg-zinc-700 overflow-hidden mt-0.5">
+                      {prof?.avatar_url ? (
+                        <img src={prof.avatar_url} alt={name} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center">
+                          <svg className="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                      )}
                     </div>
-                    {p.status && (
-                      <div className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                        p.status === 'read' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
-                        : p.status === 'reading' ? 'bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-200'
-                        : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'
-                      }`}>
-                        {p.status === 'to_read' ? 'To read' : p.status === 'reading' ? 'Reading' : 'Read'}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        <a href={`/u/${prof?.username ?? ''}`} className="font-medium text-gray-900 hover:underline dark:text-white">
+                          {name}
+                        </a>{' '}
+                        {action}
                       </div>
-                    )}
+                      {p.status && (
+                        <div className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                          p.status === 'read' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
+                          : p.status === 'reading' ? 'bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-200'
+                          : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'
+                        }`}>
+                          {p.status === 'to_read' ? 'To read' : p.status === 'reading' ? 'Reading' : 'Read'}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <time
-                    className="text-xs text-gray-500 dark:text-gray-500"
+                    className="text-xs text-gray-500 dark:text-gray-500 flex-shrink-0"
                     title={formatDateTime(p.created_at)}
                   >
                     {formatRelativeTime(p.created_at)}
