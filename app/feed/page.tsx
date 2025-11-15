@@ -26,6 +26,8 @@ export default function FeedPage() {
   const [likedByMe, setLikedByMe] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
   const [expandedAuthors, setExpandedAuthors] = useState<Set<string>>(new Set())
+  const [searchQuery, setSearchQuery] = useState('')
+  const [allProfiles, setAllProfiles] = useState<Record<string, { username: string | null; display_name: string | null }>>({})
 
   useEffect(() => {
     const init = async () => {
@@ -72,6 +74,16 @@ export default function FeedPage() {
         }
         setProfiles(map)
       }
+      
+      // fetch ALL profiles for search functionality
+      const allProfRes = await supabaseBrowser.from('profiles').select('id,username,display_name')
+      if (!allProfRes.error) {
+        const allMap: any = {}
+        for (const r of allProfRes.data as any[]) {
+          allMap[r.id] = { username: r.username, display_name: r.display_name }
+        }
+        setAllProfiles(allMap)
+      }
       // fetch papers for unique openalex ids
       const idsOpen = Array.from(new Set(ps.map((p) => p.openalex_id).filter(Boolean))) as string[]
       if (idsOpen.length > 0) {
@@ -111,14 +123,91 @@ export default function FeedPage() {
     )
   }
 
+  // Helper function for fuzzy matching
+  const fuzzyMatch = (name: string, query: string): boolean => {
+    const nameLower = name.toLowerCase()
+    const queryLower = query.toLowerCase()
+    
+    // Exact substring match
+    if (nameLower.includes(queryLower)) return true
+    
+    // Fuzzy match: all characters of query appear in order in name
+    let queryIdx = 0
+    for (let i = 0; i < nameLower.length && queryIdx < queryLower.length; i++) {
+      if (nameLower[i] === queryLower[queryIdx]) queryIdx++
+    }
+    return queryIdx === queryLower.length
+  }
+
+  // Filter posts based on search query
+  const filteredPosts = searchQuery.trim() === ''
+    ? posts
+    : (() => {
+        // Get matching user IDs from all profiles
+        const matchingUserIds = new Set<string>()
+        for (const [userId, prof] of Object.entries(allProfiles)) {
+          const name = prof?.display_name || prof?.username || ''
+          if (fuzzyMatch(name, searchQuery)) {
+            matchingUserIds.add(userId)
+          }
+        }
+        
+        // Return posts only from matching users
+        return posts.filter((p) => matchingUserIds.has(p.user_id))
+      })()
+
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6">
       <h1 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white">Feed</h1>
-      {posts.length === 0 ? (
-        <p className="text-gray-700 dark:text-gray-300">No activity yet.</p>
+      <input
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder="Search users..."
+        className="mb-4 w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-900 focus:border-orange-600 focus:outline-none dark:border-gray-700 dark:bg-zinc-800 dark:text-white"
+      />
+      
+      {/* Search Results */}
+      {searchQuery.trim() !== '' && (() => {
+        const matchingUsers = Object.entries(allProfiles)
+          .filter(([userId, prof]) => {
+            const name = prof?.display_name || prof?.username || ''
+            return fuzzyMatch(name, searchQuery)
+          })
+          .map(([userId, prof]) => ({ userId, ...prof }))
+        
+        return (
+          <div className="mb-4">
+            <h2 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Found {matchingUsers.length} user{matchingUsers.length !== 1 ? 's' : ''}
+            </h2>
+            <ul className="space-y-2">
+              {matchingUsers.map((user) => (
+                <li key={user.userId} className="rounded-lg border border-gray-200 p-2 dark:border-zinc-800">
+                  <a href={`/u/${user.username ?? ''}`} className="flex items-center justify-between hover:bg-gray-50 dark:hover:bg-zinc-900 p-1 rounded">
+                    <div>
+                      <div className="font-medium text-gray-900 dark:text-white">
+                        {user.display_name || user.username}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        @{user.username}
+                      </div>
+                    </div>
+                    <div className="text-orange-600 dark:text-orange-400">→</div>
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <hr className="my-4 border-gray-200 dark:border-zinc-700" />
+          </div>
+        )
+      })()}
+      
+      {/* Feed Posts */}
+      {filteredPosts.length === 0 ? (
+        <p className="text-gray-700 dark:text-gray-300">{searchQuery ? 'No activity from these users.' : 'No activity yet.'}</p>
       ) : (
         <ul className="space-y-3">
-          {posts.map((p) => {
+          {filteredPosts.map((p) => {
             const prof = profiles[p.user_id]
             const paper = p.openalex_id ? papers[p.openalex_id] : null
             const name = prof?.display_name || prof?.username || p.user_id
@@ -232,5 +321,3 @@ export default function FeedPage() {
     </div>
   )
 }
-
-
