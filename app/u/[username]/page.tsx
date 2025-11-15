@@ -47,6 +47,13 @@ export default function PublicProfilePage() {
         router.replace('/404')
         return
       }
+      
+      // If viewing own profile, redirect to /profile
+      if (data.session?.user?.id === p.id) {
+        router.replace('/profile')
+        return
+      }
+      
       setProfile(p)
       const c = await getFollowCounts(p.id)
       setCounts(c)
